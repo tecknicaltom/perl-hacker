@@ -2,7 +2,7 @@
 # This file must be used with "source bin/activate" *from bash*
 # you cannot run it directly
 
-THISDIR="$(dirname "$(realpath "$0")")"
+THISDIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 
 PATH="$THISDIR:$PATH"
 export PATH
