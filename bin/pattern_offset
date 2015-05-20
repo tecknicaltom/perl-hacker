@@ -1,0 +1,17 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use diagnostics;
+use feature 'say';
+
+use PatternCreate 'pattern_offset';
+
+if (@ARGV != 1)
+{
+	say "Usage: pattern_offset needle";
+	exit;
+}
+
+say pattern_offset($ARGV[0]);
+

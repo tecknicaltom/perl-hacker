@@ -1,0 +1,224 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use diagnostics;
+use feature 'say';
+use Data::Dumper;
+
+my $exe = $ARGV[0];
+my $out = "";
+my %got;
+my %plt;
+my %text;
+my %data;
+my %bss;
+
+my $pkg = $exe;
+$pkg =~ s/.*\///;
+$pkg =~ s/[\/.-]/_/g;
+
+$out .= "package $pkg;\n\n";
+
+$out .= "our \$offset = 0;\n\n";
+
+open RELOCS, "-|", "objdump -R \"$exe\"";
+while(<RELOCS>)
+{
+	if(/^([0-9a-f]+) R_386_JUMP_SLOT\s+(.*)/)
+	{
+		$got{$2} = '0x'.$1;
+	}
+}
+$out .= "our \%got = (\n";
+for my $sym (keys %got)
+{
+	$out .= "	'$sym' => $got{$sym},\n";
+}
+$out .= ");\n\n";
+
+open SYMS, "-|", "objdump -d -j .plt \"$exe\"";
+while(<SYMS>)
+{
+	if(/^([0-9a-f]+) <([^*]*?)\@plt>:/)
+	{
+		$plt{$2} = '0x'.$1;
+	}
+}
+
+$out .= "our \%plt = (\n";
+for my $sym (keys %plt)
+{
+	$out .= "	'$sym' => $plt{$sym},\n";
+}
+$out .= ");\n\n";
+
+open SYMS, "-|", "objdump -Tt -j .text \"$exe\"";
+while(<SYMS>)
+{
+	if(/^([0-9a-f]+) .*\.text.*\s+(\S+)$/)
+	{
+		next if($2 eq '.text');
+		$text{$2} = '0x'.$1;
+	}
+}
+$out .= "our \%text = (\n";
+for my $sym (keys %text)
+{
+	$out .= "	'$sym' => $text{$sym},\n";
+}
+$out .= ");\n\n";
+
+open SYMS, "-|", "objdump -Tt -j .data \"$exe\"";
+while(<SYMS>)
+{
+	if(/^([0-9a-f]+) .*\.data.*\s+([^ _]\S+)$/)
+	{
+		next if($2 eq '.data');
+		$data{$2} = '0x'.$1;
+	}
+}
+$out .= "our \%data = (\n";
+for my $sym (keys %data)
+{
+	$out .= "	'$sym' => $data{$sym},\n";
+}
+$out .= ");\n\n";
+
+open SYMS, "-|", "objdump -Tt -j .bss \"$exe\"";
+while(<SYMS>)
+{
+	if(/^([0-9a-f]+) .*\.bss.*\s+([^ _]\S+)$/)
+	{
+		next if($2 eq '.bss');
+		$bss{$2} = '0x'.$1;
+	}
+}
+$out .= "our \%bss = (\n";
+for my $sym (keys %bss)
+{
+	$out .= "	'$sym' => $bss{$sym},\n";
+}
+$out .= ");\n\n";
+
+my ($rodata_size, $rodata_virtual_addr, $dummy, $rodata_file_offset);
+open SECTIONS, "-|", "objdump -h \"$exe\"";
+while(<SECTIONS>)
+{
+	if(/^\s*\d+\s+\.rodata\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)\s+([0-9a-f]+)/)
+	{
+		($rodata_size, $rodata_virtual_addr, $dummy, $rodata_file_offset) = ($1, $2, $3, $4);
+		last;
+	}
+}
+open STRINGS, "-|", "readelf -p .rodata \"$exe\"";
+$out .= "our \%rodata_strings = (\n";
+while(<STRINGS>)
+{
+	if(/^\s*\[\s*([0-9a-f]+)\] +GNU C Library/)
+	{
+		my $virt = hex($1)+hex($rodata_virtual_addr);
+		$out .= sprintf "	'gnulibc_version' => 0x%08x,\n", $virt;
+	}
+	if(/^\s*\[\s*([0-9a-f]+)\] +\/bin\/sh$/)
+	{
+		my $virt = hex($1)+hex($rodata_virtual_addr);
+		$out .= sprintf "	'bin_sh' => 0x%08x,\n", $virt;
+	}
+}
+$out .= ");\n\n";
+
+open ROPGADGET, "-|", "~/dev/ROPgadget/ROPgadget -only pop \"$exe\" 2>&1";
+$out .= "our \%gadgets = (\n";
+my %generic_gadgets;
+while(<ROPGADGET>)
+{
+	if(/^(0x[0-9a-f]+): (.*)/)
+	{
+		my ($addy, $asm) = ($1, $2);
+		$asm =~ s/[^a-z]/_/g;
+		$asm =~ s/__+/_/g;
+		$out .= "  $asm => $addy,\n";
+		my $generic = join '', ($asm =~ /(?:pop)|(?:ret)/g);
+		push @{$generic_gadgets{$generic}}, $addy;
+	}
+}
+close ROPGADGET;
+foreach my $generic (keys %generic_gadgets)
+{
+	$out .= "  $generic => [\n";
+	foreach my $addy (@{$generic_gadgets{$generic}})
+	{
+		$out .= "    $addy,\n";
+	}
+	$out .= "  ],\n";
+}
+$out .= ");\n\n";
+
+my $rop = '';
+open ROPGADGET, "-|", "~/dev/ROPgadget/ROPgadget -perlsyn \"$exe\" 2>/dev/null";
+while(<ROPGADGET>)
+{
+	next unless /^(#|\$p)/;
+	$rop .= "	$_";
+}
+if ($rop)
+{
+	$out .= <<"EOF";
+
+sub rop_shell(\$)
+{
+	my (\$off) = \@_;
+$rop
+	return \$p;
+}
+
+EOF
+}
+else
+{
+	$out .= <<"EOF";
+
+sub rop_shell(\$)
+{
+	die "ROPGadget failed.";
+}
+
+EOF
+}
+
+$out .= <<'EOF';
+
+sub relocate_offset($)
+{
+	my ($offset) = @_;
+	foreach my $section (\%got, \%plt, \%text, \%data, \%rodata_strings, \%gadgets )
+	{
+		foreach my $s (keys %$section)
+		{
+			if(ref $section->{$s} eq 'ARRAY')
+			{
+				$section->{$s}->[$_] += $offset foreach(0 .. $#{$section->{$s}});
+			}
+			else
+			{
+				$section->{$s} += $offset;
+			}
+		}
+	}
+}
+
+sub relocate_from_text($$)
+{
+	my ($symbol, $address) = @_;
+	die "Unknown symbol: $symbol" unless defined($text{$symbol});
+	$offset = $address - $text{$symbol};
+	relocate_offset($offset);
+}
+
+1;
+EOF
+
+open OUT, ">", "$pkg.pm";
+print OUT $out;
+close OUT;
