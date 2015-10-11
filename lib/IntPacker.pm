@@ -2,7 +2,7 @@
 
 package IntPacker;
 use Exporter 'import';
-@EXPORT_OK = qw(p up);
+@EXPORT_OK = qw(p up p64 up64);
 
 use strict;
 use warnings;
@@ -20,4 +20,18 @@ sub up($)
 {
 	$_ = shift;
 	return unpack('V', $_);
+}
+
+# shortcut for packing 64-bit addresses/longs
+sub p64($)
+{
+	$_ = shift;
+	return pack('Q', $_);
+}
+
+# shortcut for unpacking 64-bit addresses/longs
+sub up64($)
+{
+	$_ = shift;
+	return unpack('Q', $_);
 }
