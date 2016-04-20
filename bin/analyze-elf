@@ -22,84 +22,53 @@ $out .= "package $pkg;\n\n";
 
 $out .= "our \$offset = 0;\n\n";
 
+sub format_hash($%)
+{
+	my $out = '';
+	my ($name, %hash) = @_;
+	$out .= "our \%$name = (\n";
+	foreach my $k (sort { $hash{$a} <=> $hash{$b} } keys %hash)
+	{
+		$out .= sprintf("	'%s' => 0x%08x,\n", $k, $hash{$k});
+	}
+	$out .= ");\n\n";
+	return $out;
+}
+
 open RELOCS, "-|", "objdump -R \"$exe\"";
 while(<RELOCS>)
 {
-	if(/^([0-9a-f]+) (?:R_386_JUMP_SLOT|R_X86_64_JUMP_SLOT)\s+(.*)/)
-	{
-		$got{$2} = '0x'.$1;
-	}
+	$got{$2} = hex($1) if(/^([0-9a-f]+) (?:R_386_JUMP_SLOT|R_X86_64_JUMP_SLOT)\s+(.*)/);
 }
-$out .= "our \%got = (\n";
-for my $sym (keys %got)
-{
-	$out .= "	'$sym' => $got{$sym},\n";
-}
-$out .= ");\n\n";
+$out .= format_hash('got', %got);
 
 open SYMS, "-|", "objdump -d -j .plt \"$exe\"";
 while(<SYMS>)
 {
-	if(/^([0-9a-f]+) <([^*]*?)\@plt>:/)
-	{
-		$plt{$2} = '0x'.$1;
-	}
+	$plt{$2} = hex($1) if(/^([0-9a-f]+) <([^*]*?)\@plt>:/);
 }
-
-$out .= "our \%plt = (\n";
-for my $sym (keys %plt)
-{
-	$out .= "	'$sym' => $plt{$sym},\n";
-}
-$out .= ");\n\n";
+$out .= format_hash('plt', %plt);
 
 open SYMS, "-|", "objdump -Tt -j .text \"$exe\"";
 while(<SYMS>)
 {
-	if(/^([0-9a-f]+) .*\.text.*\s+(\S+)$/)
-	{
-		next if($2 eq '.text');
-		$text{$2} = '0x'.$1;
-	}
+	$text{$2} = hex($1) if(/^([0-9a-f]+) .*\.text.*\s+(\S+)$/ && $2 ne '.text');
 }
-$out .= "our \%text = (\n";
-for my $sym (keys %text)
-{
-	$out .= "	'$sym' => $text{$sym},\n";
-}
-$out .= ");\n\n";
+$out .= format_hash('text', %text);
 
 open SYMS, "-|", "objdump -Tt -j .data \"$exe\"";
 while(<SYMS>)
 {
-	if(/^([0-9a-f]+) .*\.data.*\s+([^ _]\S+)$/)
-	{
-		next if($2 eq '.data');
-		$data{$2} = '0x'.$1;
-	}
+	$data{$2} = hex($1) if(/^([0-9a-f]+) .*\.data.*\s+([^ _]\S+)$/ && $2 ne '.data')
 }
-$out .= "our \%data = (\n";
-for my $sym (keys %data)
-{
-	$out .= "	'$sym' => $data{$sym},\n";
-}
-$out .= ");\n\n";
+$out .= format_hash('data', %data);
 
 open SYMS, "-|", "objdump -Tt -j .bss \"$exe\"";
 while(<SYMS>)
 {
-	if(/^([0-9a-f]+) .*\.bss.*\s+([^ _]\S+)$/)
-	{
-		next if($2 eq '.bss');
-		$bss{$2} = '0x'.$1;
-	}
+	$bss{$2} = hex($1) if(/^([0-9a-f]+) .*\.bss.*\s+([^ _]\S+)$/ && $2 ne '.bss');
 }
-$out .= "our \%bss = (\n";
-for my $sym (keys %bss)
-{
-	$out .= "	'$sym' => $bss{$sym},\n";
-}
-$out .= ");\n\n";
+$out .= format_hash('bss', %bss);
 
 my ($rodata_size, $rodata_virtual_addr, $dummy, $rodata_file_offset);
 open SECTIONS, "-|", "objdump -h \"$exe\"";
