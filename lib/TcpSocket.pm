@@ -42,14 +42,14 @@ sub DESTROY($) {
 
 sub tryread($;@)
 {
-	my $sock = shift;
+	my $self = shift;
 
 	my %defaults = ( timeout => 5, followup_timeout => 0.1, 
-		slurp => 1, until => undef, debug => ${*$sock}{debug} );
+		slurp => 1, until => undef, debug => ${*$self}{debug} );
 	my %args = ( %defaults, @_ );
 	$args{slurp} = 1 if($args{until});
 
-	my $readbuff = ${*$sock}{'readbuff'} || '';
+	my $readbuff = ${*$self}{'readbuff'} || '';
 	my $leftover = '';
 	my $timeout_happened = 0;
 	my $timeout = $args{timeout};
@@ -94,7 +94,7 @@ sub tryread($;@)
 		}
 
 		my $set = new IO::Select();
-		$set->add($sock);
+		$set->add($self);
 		my @ready = $set->can_read($timeout);
 		if(!@ready)
 		{
@@ -102,14 +102,14 @@ sub tryread($;@)
 		}
 		foreach my $fh (@ready)
 		{
-			if($fh == $sock)
+			if($fh == $self)
 			{
 				my $thisreadbuff;
-				my $ret = $sock->sysread($thisreadbuff, 100);
+				my $ret = $self->sysread($thisreadbuff, 100);
 				if(not defined($ret) or $ret == 0)
 				{
 					# closed the socket
-					$sock->close();
+					$self->close();
 					last READLOOP;
 				}
 				$readbuff .= $thisreadbuff;
@@ -117,7 +117,7 @@ sub tryread($;@)
 			}
 		}
 	}
-	${*$sock}{'readbuff'} = $leftover;
+	${*$self}{'readbuff'} = $leftover;
 	if($args{debug})
 	{
 		say "Response:";
@@ -128,10 +128,10 @@ sub tryread($;@)
 
 sub print($$;@)
 {
-	my $sock = shift;
+	my $self = shift;
 	my $data = shift;
 
-	my %defaults = ( debug => ${*$sock}{debug} );
+	my %defaults = ( debug => ${*$self}{debug} );
 	my %args = ( %defaults, @_ );
 
 	if ($args{debug})
@@ -139,14 +139,14 @@ sub print($$;@)
 		say "Sending:";
 		say _dumpstr($data);
 	}
-	return $sock->SUPER::print($data);
+	return $self->SUPER::print($data);
 }
 
 sub say($$;@)
 {
-	my $sock = shift;
+	my $self = shift;
 	my $data = shift;
-	return $sock->print($data . "\n", @_);
+	return $self->print($data . "\n", @_);
 }
 
 sub _dumpstr($)
