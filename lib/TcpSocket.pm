@@ -1,108 +1,189 @@
 #!/usr/bin/perl
 
 package TcpSocket;
+use parent 'IO::Socket::INET';
 
 use strict;
-our @ISA;
 use warnings;
 use diagnostics;
+use feature 'say';
 use IO::Socket;
-use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
 use IO::Select;
 
-@ISA = qw(IO::Socket::INET);
+my $has_hexify = 0;
+eval "use Data::Hexify; 1" and $has_hexify = 1;
 
-my %_data;
-
-sub new($$$;&) {
+sub new($$$;@) {
 	my $class = shift;
 	my $host = shift;
 	my $port = shift;
-	my $code = \&{ shift @_ } if(@_);
 
-	my $self = $class->SUPER::new(
-		Proto => 'tcp'
-		);
-	$_data{$self} = {
-		host => $host,
-		port => $port,
-		code => $code,
-	};
-	$self->_connect();
-	return $self;
-}
+	my %defaults = (
+		debug => 0,
+		Proto => 'tcp',
+		Blocking => 0,
+	);
+	my %args = ( %defaults, @_,
+		PeerAddr => $host,
+		PeerPort => $port,
+	);
 
-sub _connect($)
-{
-	my $self = shift;
-	my $foo = $self->configure({
-			PeerPort=>$_data{$self}->{port},
-			PeerAddr=>$_data{$self}->{host},
-			Blocking=>0,
-			Proto=>'tcp',
-		});
+	my $self = $class->SUPER::new(%args);
 	binmode $self, ":raw";
-
-	my $code = $_data{$self}->{code};
-	if ($code)
-	{
-		$_ = $self;
-		$code->($self);
-	}
-
 	return $self;
 }
 
-sub reconnect($)
-{
-	my $self = shift;
-	$self->close();
-	$self->_connect();
-}
 
 sub DESTROY($) {
 	my $self = shift;
-	delete $_data{$self};
 	$self->SUPER::DESTROY();
 }
 
-sub tryread($;$)
+sub tryread($;@)
 {
 	my $sock = shift;
-	my $wholeread = "";
-	my $thisread;
-	my $ret;
 
-	my $timeout = 5;
-	$timeout = shift if(@_);
-	my $slurp = 1;
-	$slurp = shift if(@_);
-	#print "timeout: $timeout\n";
-	#print "slurp $slurp\n";
+	my %defaults = ( timeout => 5, followup_timeout => 0.1, 
+		slurp => 1, until => undef, debug => 0 );
+	my %args = ( %defaults, @_ );
+	$args{slurp} = 1 if($args{until});
 
+	my $readbuff = ${*$sock}{'readbuff'} || '';
+	my $leftover = '';
+	my $timeout_happened = 0;
+	my $timeout = $args{timeout};
 
-	my $set = new IO::Select();
-	$set->add($sock);
-	while(my @ready = $set->can_read($timeout))
+	# if we've already got data in the buffer and we're not waiting
+	# for a match, decrease the timeout as if we've already read once
+	# and we're looping for more data
+	if ($readbuff && !$args{until})
 	{
+		$timeout = $args{followup_timeout};
+	}
+
+	READLOOP:
+	while(1)
+	{
+		if ($timeout_happened || $readbuff)
+		{
+			if($args{until})
+			{
+				my $index = index($readbuff, $args{until});
+				if($index >= 0)
+				{
+					$index += length($args{until});
+					$leftover = substr($readbuff, $index);
+					$readbuff = substr($readbuff, 0, $index);
+					last READLOOP;
+				}
+				if($timeout_happened)
+				{
+					# timeout without seeing search text... keep
+					# what we have in the buffer and return empty
+					# string
+					($readbuff, $leftover) = ('', $readbuff);
+					last READLOOP;
+				}
+			}
+			if(!$args{slurp})
+			{
+				last READLOOP;
+			}
+			last READLOOP if($timeout_happened);
+		}
+
+		my $set = new IO::Select();
+		$set->add($sock);
+		my @ready = $set->can_read($timeout);
+		if(!@ready)
+		{
+			$timeout_happened = 1;
+		}
 		foreach my $fh (@ready)
 		{
-			if($fh->fileno == $sock->fileno)
+			if($fh == $sock)
 			{
-				my $ret = $fh->sysread($thisread, 100);
+				my $thisreadbuff;
+				my $ret = $sock->sysread($thisreadbuff, 100);
 				if(not defined($ret) or $ret == 0)
 				{
 					# closed the socket
-					$fh->close();
-					return $wholeread;
+					$sock->close();
+					last READLOOP;
 				}
-				$wholeread .= $thisread;
-				return $wholeread if(!$slurp);
-				$timeout = 0.01;
+				$readbuff .= $thisreadbuff;
+				$timeout = $args{followup_timeout};
 			}
 		}
 	}
-	return $wholeread;
+	${*$sock}{'readbuff'} = $leftover;
+	if($args{debug})
+	{
+		say "Response:";
+		say _dumpstr($readbuff);
+	}
+	return $readbuff;
 }
+
+sub print($$;@)
+{
+	my $sock = shift;
+	my $data = shift;
+
+	my %defaults = ( debug => 0 );
+	my %args = ( %defaults, @_ );
+
+	if ($args{debug})
+	{
+		say "Sending:";
+		say _dumpstr($data);
+	}
+	return $sock->SUPER::print($data);
+}
+
+sub say($$;@)
+{
+	my $sock = shift;
+	my $data = shift;
+	return $sock->print($data . "\n", @_);
+}
+
+sub _dumpstr($)
+{
+	my ($payload) = @_;
+	if(!$has_hexify || $payload =~ /^[\w ]*$/)
+	{
+		say $payload;
+	}
+	else
+	{
+		print Hexify($payload);
+	}
+}
+
+#sub converse($$;@)
+#{
+#	my $sock = shift;
+#	my $payload = shift;
+#	my %args = @_;
+#
+#	$payload .= "\n" unless($args{nonl});
+#	if($args{debug})
+#	{
+#		say "Sending:";
+#		say _dumpstr($payload);
+#	}
+#	print $sock $payload;
+#
+#	my $response = '';
+#	#if($args->{until})
+#	$response .= $sock->tryread();
+#	if($args{debug})
+#	{
+#		say "Response:";
+#		say _dumpstr($response);
+#	}
+#	return $response;
+#}
 
 1;
