@@ -29,6 +29,7 @@ sub new($$$;@) {
 	);
 
 	my $self = $class->SUPER::new(%args);
+	${*$self}{debug} = $args{debug};
 	binmode $self, ":raw";
 	return $self;
 }
@@ -44,7 +45,7 @@ sub tryread($;@)
 	my $sock = shift;
 
 	my %defaults = ( timeout => 5, followup_timeout => 0.1, 
-		slurp => 1, until => undef, debug => 0 );
+		slurp => 1, until => undef, debug => ${*$sock}{debug} );
 	my %args = ( %defaults, @_ );
 	$args{slurp} = 1 if($args{until});
 
@@ -130,7 +131,7 @@ sub print($$;@)
 	my $sock = shift;
 	my $data = shift;
 
-	my %defaults = ( debug => 0 );
+	my %defaults = ( debug => ${*$sock}{debug} );
 	my %args = ( %defaults, @_ );
 
 	if ($args{debug})
