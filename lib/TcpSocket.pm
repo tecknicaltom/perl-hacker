@@ -154,11 +154,11 @@ sub _dumpstr($)
 	my ($payload) = @_;
 	if(!$has_hexify || $payload =~ /^[\w ]*$/)
 	{
-		say $payload;
+		return $payload . "\n";
 	}
 	else
 	{
-		print Hexify($payload);
+		return Hexify($payload);
 	}
 }
 
