@@ -132,7 +132,7 @@ sub tryread($;@)
 	${*$self}{'readbuff'} = $leftover;
 	if($args{debug})
 	{
-		say "Response:";
+		say sprintf "socket[%s:%d] ← %s:%d", $self->sockhost(), $self->sockport(), $self->peerhost(), $self->peerport();
 		say _dumpstr($readbuff);
 	}
 	return $readbuff;
@@ -148,7 +148,7 @@ sub print($$;@)
 
 	if ($args{debug})
 	{
-		say "Sending:";
+		say sprintf "socket[%s:%d] → %s:%d", $self->sockhost(), $self->sockport(), $self->peerhost(), $self->peerport();
 		say _dumpstr($data);
 	}
 	return $self->SUPER::print($data);
