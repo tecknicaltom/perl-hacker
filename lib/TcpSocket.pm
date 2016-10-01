@@ -164,7 +164,7 @@ sub say($$;@)
 sub _dumpstr($)
 {
 	my ($payload) = @_;
-	if(!$has_hexify || $payload =~ /^[\w ]*$/)
+	if(!$has_hexify)# || $payload =~ /^[\w ]*$/)
 	{
 		return $payload . "\n";
 	}
