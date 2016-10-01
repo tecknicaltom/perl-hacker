@@ -17,20 +17,32 @@ sub new($$$;@) {
 	my $class = shift;
 	my $host = shift;
 	my $port = shift;
+	my %args = ( @_ );
 
+	my $who = defined($args{Listen}) ? 'Local' : 'Peer';
+	$args{"${who}Addr"} = $host;
+	$args{"${who}Port"} = $port;
+
+	return _construct($class, %args);
+}
+
+sub _construct($;@)
+{
+	my $class = shift;
 	my %defaults = (
 		debug => 0,
 		Proto => 'tcp',
 		Blocking => 0,
+		Reuse => 1,
 	);
-	my %args = ( %defaults, @_,
-		PeerAddr => $host,
-		PeerPort => $port,
-	);
-
+	my %args = ( %defaults, @_ );
 	my $self = $class->SUPER::new(%args);
-	${*$self}{debug} = $args{debug};
-	binmode $self, ":raw";
+	if ($self)
+	{
+		${*$self}{debug} = $args{debug};
+		binmode $self, ":raw";
+		$self->autoflush(1);
+	}
 	return $self;
 }
 
@@ -186,5 +198,23 @@ sub _dumpstr($)
 #	}
 #	return $response;
 #}
+
+sub accept($)
+{
+	my $self = shift;
+	my $new = $self->SUPER::accept('TcpSocket::accept_wrapper');
+	${*$new}{$_} = ${*$self}{$_} for qw( debug );
+	return $new;
+}
+
+# Because IO::Socket::accept takes a package and not
+# a constructor method
+package TcpSocket::accept_wrapper;
+
+sub new
+{
+	my $class = shift;
+	return TcpSocket->_construct(@_);
+}
 
 1;
