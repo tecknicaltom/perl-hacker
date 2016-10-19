@@ -7,12 +7,22 @@ use Exporter 'import';
 use strict;
 use warnings;
 use diagnostics;
+use Carp;
+
+use constant {
+	MODE_METASPLOIT => 0,
+	MODE_PEDA => 1,
+};
+
+our $Mode = MODE_METASPLOIT unless defined $Mode;
+our $SearchLength = 8192 unless defined $SearchLength;
 
 sub pattern_create($)
 {
 	my ($max) = @_;
-	return pattern_create_metasploit($max);
-	#return pattern_create_peda($max);
+	return pattern_create_metasploit($max) if($Mode == MODE_METASPLOIT);
+	return pattern_create_peda($max) if($Mode == MODE_PEDA);
+	croak "Unknown value for PatternCreate::Mode";
 }
 
 sub pattern_offset($)
@@ -20,7 +30,7 @@ sub pattern_offset($)
 	my ($needle) = @_;
 	$needle = $1 if($needle =~ /^0x([0-9a-f]*)/);
 	$needle = pack('V*', hex($needle)) if(length($needle) >= 8 and $needle =~ /^[0-9a-f]+$/i and hex($needle) > 0);
-	my $pattern = pattern_create(8192);
+	my $pattern = pattern_create($SearchLength);
 	my $offset = index($pattern, $needle);
 	my @offsets = ();
 	while($offset >= 0)
