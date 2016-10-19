@@ -11,6 +11,39 @@ use diagnostics;
 sub pattern_create($)
 {
 	my ($max) = @_;
+	return pattern_create_metasploit($max);
+	#return pattern_create_peda($max);
+}
+
+sub pattern_offset($)
+{
+	my ($needle) = @_;
+	$needle = $1 if($needle =~ /^0x([0-9a-f]*)/);
+	$needle = pack('V*', hex($needle)) if(length($needle) >= 8 and $needle =~ /^[0-9a-f]+$/i and hex($needle) > 0);
+	my $pattern = pattern_create(8192);
+	my $offset = index($pattern, $needle);
+	my @offsets = ();
+	while($offset >= 0)
+	{
+		#if(!wantarray())
+		{
+			return $offset;
+		}
+		push @offsets, $offset;
+		$offset = index($pattern, $needle, $offset+1);
+	}
+	if(wantarray())
+	{
+		return ();
+	}
+	return undef;
+}
+
+# Metasploit-compatible patterns
+
+sub pattern_create_metasploit($)
+{
+	my ($max) = @_;
 	my @sets = (['A'..'Z'], ['a'..'z'], ['0'..'9']);
 	my @indices = (0) x @sets;
 	my $len = 0;
@@ -40,28 +73,54 @@ sub pattern_create($)
 	return $out;
 }
 
-sub pattern_offset($)
+# PEDA-compatible pattern
+
+my $peda_extended_charset = 'A%sB$nC-(D;)Ea0Fb1Gc2Hd3Ie4Jf5Kg6Lh7Mi8Nj9OkPlQmRoSpTqUrVtWuXvYwZxyz';
+
+sub de_bruijn($$$)
 {
-	my ($needle) = @_;
-	$needle = $1 if($needle =~ /^0x([0-9a-f]*)/);
-	$needle = pack('V*', hex($needle)) if(length($needle) >= 8 and $needle =~ /^[0-9a-f]+$/i and hex($needle) > 0);
-	my $pattern = pattern_create(8192);
-	my $offset = index($pattern, $needle);
-	my @offsets = ();
-	while($offset >= 0)
+	my ($charset, $n, $maxlen) = @_;
+	my @a = (0) x (length($charset) * $n);
+	my @sequence;
+
+	sub db($$$$$$$);
+	sub db($$$$$$$)
 	{
-		#if(!wantarray())
+		my ($charset, $n, $maxlen, $a, $sequence, $t, $p) = @_;
+		return if scalar(@$sequence) == $maxlen;
+
+		if($t > $n)
 		{
-			return $offset;
+			if($n % $p == 0)
+			{
+				foreach my $j (1 .. $p)
+				{
+					push @$sequence, substr($charset, $a->[$j], 1);
+					return if scalar(@$sequence) == $maxlen;
+				}
+			}
 		}
-		push @offsets, $offset;
-		$offset = index($pattern, $needle, $offset+1);
+		else
+		{
+			$a->[$t] = $a->[$t - $p];
+			db($charset, $n, $maxlen, $a, $sequence, $t+1, $p);
+			foreach my $j ($a->[$t - $p] + 1 .. length($charset)-1)
+			{
+				$a->[$t] = $j;
+				db($charset, $n, $maxlen, $a, $sequence, $t+1, $t);
+			}
+		}
+
 	}
-	if(wantarray())
-	{
-		return ();
-	}
-	return undef;
+	db($charset, $n, $maxlen, \@a, \@sequence,  1, 1);
+
+	return join '', @sequence;
+}
+
+sub pattern_create_peda($)
+{
+	my ($max) = @_;
+	return de_bruijn($peda_extended_charset, 3, $max);
 }
 
 1
