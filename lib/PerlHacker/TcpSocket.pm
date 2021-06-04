@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-package TcpSocket;
+package PerlHacker::TcpSocket;
 use parent 'IO::Socket::INET';
 
 use strict;

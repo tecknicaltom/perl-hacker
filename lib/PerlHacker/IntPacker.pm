@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-package IntPacker;
+package PerlHacker::IntPacker;
 use Exporter 'import';
 @EXPORT_OK = qw(p up p64 up64);
 

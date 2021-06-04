@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-package PatternCreate;
+package PerlHacker::PatternCreate;
 use Exporter 'import';
 @EXPORT_OK = qw(pattern_create pattern_offset);
 

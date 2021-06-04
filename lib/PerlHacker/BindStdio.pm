@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-package BindStdio;
+package PerlHacker::BindStdio;
 use Exporter 'import';
 @EXPORT_OK = qw(bind_stdio);
 
