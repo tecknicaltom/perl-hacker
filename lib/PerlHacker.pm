@@ -4,6 +4,15 @@ use 5.006;
 use strict;
 use warnings;
 
+our $VERSION = '0.01';
+
+sub function1 {
+}
+
+1; # End of PerlHacker
+
+__DATA__
+
 =head1 NAME
 
 PerlHacker - The great new PerlHacker!
@@ -13,9 +22,6 @@ PerlHacker - The great new PerlHacker!
 Version 0.01
 
 =cut
-
-our $VERSION = '0.01';
-
 
 =head1 SYNOPSIS
 
@@ -38,17 +44,6 @@ if you don't export anything, such as for a purely object-oriented module.
 =head2 function1
 
 =cut
-
-sub function1 {
-}
-
-=head2 function2
-
-=cut
-
-sub function2 {
-}
-
 =head1 AUTHOR
 
 Tom Samstag, C<< <github at modtwo.com> >>
@@ -114,5 +109,3 @@ along with this program.  If not, see L<http://www.gnu.org/licenses/>.
 
 
 =cut
-
-1; # End of PerlHacker
