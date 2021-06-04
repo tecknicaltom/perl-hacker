@@ -2,7 +2,8 @@
 
 package PerlHacker::PatternCreate;
 use Exporter 'import';
-@EXPORT_OK = qw(pattern_create pattern_offset);
+our @EXPORT_OK = qw(pattern_create pattern_offset);
+our %EXPORT_TAGS = (all => [@EXPORT_OK]);
 
 use strict;
 use warnings;

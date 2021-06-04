@@ -2,7 +2,7 @@
 
 package PerlHacker::BindStdio;
 use Exporter 'import';
-@EXPORT_OK = qw(bind_stdio);
+our @EXPORT_OK = qw(bind_stdio);
 
 use strict;
 use warnings;
