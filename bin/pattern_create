@@ -5,7 +5,7 @@ use warnings;
 use diagnostics;
 use feature 'say';
 
-use PatternCreate 'pattern_create';
+use PerlHacker::PatternCreate 'pattern_create';
 
 if (@ARGV != 1 or 0+$ARGV[0] <= 0)
 {

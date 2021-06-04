@@ -21,6 +21,11 @@ WriteMakefile(
         #'ABC'              => '1.6',
         #'Foo::Bar::Module' => '5.0401',
     },
+    EXE_FILES => [
+        'bin/analyze-elf',
+        'bin/pattern_create',
+        'bin/pattern_offset',
+    ],
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'PerlHacker-*' },
 );

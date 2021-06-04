@@ -5,7 +5,7 @@ use warnings;
 use diagnostics;
 use feature 'say';
 
-use PatternCreate 'pattern_offset';
+use PerlHacker::PatternCreate 'pattern_offset';
 
 if (@ARGV != 1)
 {
